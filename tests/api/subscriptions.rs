@@ -1,12 +1,13 @@
 use crate::helpers::spawn_app;
+use claims::assert_ok;
+use newsletter_api::utils::ResponseErrorMessage;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
 
 #[tokio::test]
-async fn subscribe_returns_a_200_for_valid_form_data() {
+async fn subscribe_returns_a_200_for_valid_params() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -15,7 +16,11 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
         .await;
 
     // Act
-    let response = app.post_subscriptions(body.into()).await;
+    let response = app
+        .post_subscriptions(
+            &serde_json::json!({"name": "le guin", "email": "ursula_le_guin@gmail.com"}),
+        )
+        .await;
 
     // Assert
     assert_eq!(200, response.status().as_u16());
@@ -25,10 +30,12 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
 async fn subscribe_persists_the_new_subscriber() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(
+        &serde_json::json!({"name": "le guin", "email": "ursula_le_guin@gmail.com"}),
+    )
+    .await;
 
     // Assert
     let saved = sqlx::query!("SELECT email, name, status FROM subscriptions",)
@@ -45,7 +52,7 @@ async fn subscribe_persists_the_new_subscriber() {
 async fn subscribe_fails_if_there_is_a_fatal_database_error() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
+
     // Sabotage the database
     sqlx::query!("ALTER TABLE subscriptions DROP COLUMN email;",)
         .execute(&app.db_pool)
@@ -53,7 +60,11 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
         .unwrap();
 
     // Act
-    let response = app.post_subscriptions(body.into()).await;
+    let response = app
+        .post_subscriptions(
+            &serde_json::json!({"name": "le guin", "email": "ursula_le_guin@gmail.com"}),
+        )
+        .await;
 
     // Assert
     assert_eq!(response.status().as_u16(), 500);
@@ -63,7 +74,6 @@ async fn subscribe_fails_if_there_is_a_fatal_database_error() {
 async fn subscribe_sends_a_confirmation_email_for_valid_data() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -73,7 +83,10 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(
+        &serde_json::json!({"name": "le guin", "email": "ursula_le_guin@gmail.com"}),
+    )
+    .await;
 
     // Assert
     // Mock asserts on drop
@@ -83,7 +96,6 @@ async fn subscribe_sends_a_confirmation_email_for_valid_data() {
 async fn subscribe_sends_a_confirmation_email_with_a_link() {
     // Arrange
     let app = spawn_app().await;
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
 
     Mock::given(path("/email"))
         .and(method("POST"))
@@ -92,7 +104,10 @@ async fn subscribe_sends_a_confirmation_email_with_a_link() {
         .await;
 
     // Act
-    app.post_subscriptions(body.into()).await;
+    app.post_subscriptions(
+        &serde_json::json!({"name": "le guin", "email": "ursula_le_guin@gmail.com"}),
+    )
+    .await;
 
     // Assert
     let email_request = &app.email_server.received_requests().await.unwrap()[0];
@@ -107,14 +122,17 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
     // Arrange
     let app = spawn_app().await;
     let test_cases = vec![
-        ("name=le%20guin", "missing the email"),
-        ("email=ursula_le_guin%40gmail.com", "missing the name"),
-        ("", "missing both name and email"),
+        (serde_json::json!({"name": "le guin"}), "missing the email"),
+        (
+            serde_json::json!({"email": "ursula_le_guin@gmail.com"}),
+            "missing the email",
+        ),
+        (serde_json::json!({}), "missing both name and email"),
     ];
 
     for (invalid_body, error_message) in test_cases {
         // Act
-        let response = app.post_subscriptions(invalid_body.into()).await;
+        let response = app.post_subscriptions(&invalid_body).await;
 
         // Assert
         assert_eq!(
@@ -128,18 +146,27 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 }
 
 #[tokio::test]
-async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
+async fn subscribe_returns_a_400_with_json_message_when_fields_are_present_but_invalid() {
     // Arrange
     let app = spawn_app().await;
     let test_cases = vec![
-        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
-        ("name=Ursula&email=", "empty email"),
-        ("name=Ursula&email=definitely-not-an-email", "invalid email"),
+        (
+            serde_json::json!({"name": "", "email": "ursula_le_guin@gmail.com"}),
+            "empty name",
+        ),
+        (
+            serde_json::json!({"name": "Ursula", "email": ""}),
+            "empty email",
+        ),
+        (
+            serde_json::json!({"name": "Ursula", "email": "definitely-not-an-email"}),
+            "invalid email",
+        ),
     ];
 
     for (body, description) in test_cases {
         // Act
-        let response = app.post_subscriptions(body.into()).await;
+        let response = app.post_subscriptions(&body).await;
 
         // Assert
         assert_eq!(
@@ -148,5 +175,9 @@ async fn subscribe_returns_a_400_when_fields_are_present_but_invalid() {
             "The API did not return a 400 Bad Request when the payload was {}.",
             description
         );
+
+        let response_body: Result<ResponseErrorMessage, reqwest::Error> = response.json().await;
+
+        assert_ok!(response_body);
     }
 }

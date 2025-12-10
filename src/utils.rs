@@ -1,4 +1,3 @@
-use crate::routes::error_chain_fmt;
 use actix_web::http::StatusCode;
 use actix_web::http::header::{ContentType, LOCATION};
 use actix_web::{HttpResponse, ResponseError};
@@ -61,4 +60,19 @@ impl<T: std::fmt::Debug + std::fmt::Display + 'static> ResponseError for ServerE
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ResponseErrorMessage {
     pub error: String,
+}
+
+pub fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+
+    let mut current = e.source();
+    while let Some(cause) = current {
+        writeln!(f, "Caused by:\n\t{}", cause)?;
+        current = cause.source();
+    }
+
+    Ok(())
 }
