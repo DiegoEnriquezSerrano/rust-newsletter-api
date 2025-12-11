@@ -31,7 +31,12 @@ async fn logout_clears_session_state() {
 
     // Act - Part 3 - Logout
     let response = app.post_logout().await;
-    assert_is_redirect_to(&response, "/login");
+    assert_eq!(200, response.status().as_u16());
+    let response_body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(
+        serde_json::json!({"message": "You have successfully logged out."}),
+        response_body
+    );
 
     // Act - Part 4 - Attempt to load admin panel
     let response = app.get_admin_dashboard().await;

@@ -107,7 +107,7 @@ async fn changing_password_works() {
 
     // Act - Part 3 - Logout
     let response = app.post_logout().await;
-    assert_is_redirect_to(&response, "/login");
+    assert_eq!(200, response.status().as_u16());
 
     // Act - Part 4 - Login using the new password
     let response = app
