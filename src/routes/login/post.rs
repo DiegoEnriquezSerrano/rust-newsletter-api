@@ -46,6 +46,7 @@ pub async fn login(
             let e = match e {
                 AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
                 AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
+                AuthError::ValidationError(_) => LoginError::AuthError(e.into()),
             };
             Err(login_redirect(e))
         }

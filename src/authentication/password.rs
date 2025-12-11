@@ -11,6 +11,8 @@ pub enum AuthError {
     InvalidCredentials(#[source] anyhow::Error),
     #[error(transparent)]
     UnexpectedError(#[from] anyhow::Error),
+    #[error("{0}")]
+    ValidationError(String),
 }
 
 pub struct Credentials {
