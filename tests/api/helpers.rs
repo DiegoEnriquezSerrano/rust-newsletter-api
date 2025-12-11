@@ -53,11 +53,13 @@ impl TestApp {
         }
     }
 
-    pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
+    pub async fn post_subscriptions<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
         self.api_client
             .post(&format!("{}/subscriptions", &self.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
+            .json(body)
             .send()
             .await
             .expect("Failed to execute request.")
@@ -69,45 +71,10 @@ impl TestApp {
     {
         self.api_client
             .post(&format!("{}/login", &self.address))
-            .form(body)
+            .json(body)
             .send()
             .await
             .expect("Failed to execute request.")
-    }
-
-    pub async fn get_login_html(&self) -> String {
-        self.api_client
-            .get(&format!("{}/login", &self.address))
-            .send()
-            .await
-            .expect("Failed to execute request.")
-            .text()
-            .await
-            .unwrap()
-    }
-
-    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
-        self.api_client
-            .get(&format!("{}/admin/dashboard", &self.address))
-            .send()
-            .await
-            .expect("Failed to execute request.")
-    }
-
-    pub async fn get_admin_dashboard_html(&self) -> String {
-        self.get_admin_dashboard().await.text().await.unwrap()
-    }
-
-    pub async fn get_change_password(&self) -> reqwest::Response {
-        self.api_client
-            .get(&format!("{}/admin/password", &self.address))
-            .send()
-            .await
-            .expect("Failed to execute request.")
-    }
-
-    pub async fn get_change_password_html(&self) -> String {
-        self.get_change_password().await.text().await.unwrap()
     }
 
     pub async fn post_logout(&self) -> reqwest::Response {
@@ -118,28 +85,16 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
-    pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response
+    pub async fn put_change_password<Body>(&self, body: &Body) -> reqwest::Response
     where
         Body: serde::Serialize,
     {
         self.api_client
-            .post(&format!("{}/admin/password", &self.address))
-            .form(body)
+            .put(&format!("{}/admin/password", &self.address))
+            .json(body)
             .send()
             .await
             .expect("Failed to execute request.")
-    }
-
-    pub async fn get_publish_newsletter(&self) -> reqwest::Response {
-        self.api_client
-            .get(&format!("{}/admin/newsletters", &self.address))
-            .send()
-            .await
-            .expect("Failed to execute request.")
-    }
-
-    pub async fn get_publish_newsletter_html(&self) -> String {
-        self.get_publish_newsletter().await.text().await.unwrap()
     }
 
     pub async fn post_publish_newsletter<Body>(&self, body: &Body) -> reqwest::Response
@@ -148,7 +103,15 @@ impl TestApp {
     {
         self.api_client
             .post(&format!("{}/admin/newsletters", &self.address))
-            .form(body)
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_authenticate(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/authenticate", &self.address))
             .send()
             .await
             .expect("Failed to execute request.")
@@ -300,9 +263,4 @@ impl TestUser {
         .await
         .expect("Failed to store test user.");
     }
-}
-
-pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
-    assert_eq!(response.status().as_u16(), 303);
-    assert_eq!(response.headers().get("Location").unwrap(), location);
 }
