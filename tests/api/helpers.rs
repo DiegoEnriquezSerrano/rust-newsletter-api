@@ -1,10 +1,9 @@
-use argon2::password_hash::SaltString;
-use argon2::{Algorithm, Argon2, Params, PasswordHasher, Version};
 use fake::Fake;
 use fake::faker::internet::en::SafeEmail;
 use newsletter_api::configuration::{DatabaseSettings, get_configuration};
 use newsletter_api::email_client::EmailClient;
 use newsletter_api::issue_delivery_worker::{ExecutionOutcome, try_execute_task};
+use newsletter_api::models::{NewUser, NewUserData};
 use newsletter_api::startup::{Application, get_connection_pool};
 use newsletter_api::telemetry::{get_subscriber, init_subscriber};
 use secrecy::Secret;
@@ -221,7 +220,6 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
 }
 
 pub struct TestUser {
-    user_id: Uuid,
     pub username: String,
     pub password: String,
     pub email: String,
@@ -230,7 +228,6 @@ pub struct TestUser {
 impl TestUser {
     pub fn generate() -> Self {
         Self {
-            user_id: Uuid::new_v4(),
             username: Uuid::new_v4().to_string(),
             password: Uuid::new_v4().to_string(),
             email: SafeEmail().fake(),
@@ -246,26 +243,24 @@ impl TestUser {
     }
 
     async fn store(&self, pool: &PgPool) {
-        let salt = SaltString::generate(&mut rand::thread_rng());
-        // Match production parameters
-        let password_hash = Argon2::new(
-            Algorithm::Argon2id,
-            Version::V0x13,
-            Params::new(15000, 2, 1, None).unwrap(),
-        )
-        .hash_password(self.password.as_bytes(), &salt)
-        .unwrap()
-        .to_string();
-        sqlx::query!(
-            "INSERT INTO users (user_id, username, password_hash, email)
-            VALUES ($1, $2, $3, $4)",
-            self.user_id,
-            self.username,
-            password_hash,
-            self.email
-        )
-        .execute(pool)
-        .await
-        .expect("Failed to store test user.");
+        let new_user: NewUser = NewUserData {
+            username: self.username.clone(),
+            email: self.email.clone(),
+            password: Secret::from(self.password.clone()),
+        }
+        .try_into()
+        .expect("Failed to initialize new user.");
+        let mut transaction = pool
+            .begin()
+            .await
+            .expect("Failed to begin database transaction.");
+        new_user
+            .store(&mut transaction)
+            .await
+            .expect("Failed to store test user.");
+        transaction
+            .commit()
+            .await
+            .expect("Failed to commit database transaction.");
     }
 }

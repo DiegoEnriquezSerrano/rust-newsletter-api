@@ -80,14 +80,14 @@ pub fn error_chain_fmt(
 
 const FORBIDDEN_CHARACTERS: [char; 9] = ['/', '(', ')', '"', '<', '>', '\\', '{', '}'];
 
-pub fn contains_forbidden_characters(s: &String) -> bool {
+pub fn contains_forbidden_characters(s: &str) -> bool {
     s.chars().any(|g| FORBIDDEN_CHARACTERS.contains(&g))
 }
 
-pub fn is_too_long(s: &String, max: usize) -> bool {
+pub fn is_too_long(s: &str, max: usize) -> bool {
     s.graphemes(true).count() > max
 }
 
-pub fn is_empty_or_whitespace(s: &String) -> bool {
+pub fn is_empty_or_whitespace(s: &str) -> bool {
     s.trim().is_empty()
 }
