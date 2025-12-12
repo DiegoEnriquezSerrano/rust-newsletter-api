@@ -14,7 +14,8 @@ async fn create_unconfirmed_subscriber(app: &TestApp) -> ConfirmationLinks {
     let email: String = SafeEmail().fake();
     let body = &serde_json::json!({
         "name": name,
-        "email": email
+        "email": email,
+        "user_id": &app.test_user.user_id
     });
 
     let _mock_guard = Mock::given(path("/email"))

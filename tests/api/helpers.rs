@@ -177,17 +177,19 @@ pub async fn spawn_app() -> TestApp {
         .build()
         .unwrap();
 
+    let db_pool = get_connection_pool(&configuration.database);
+    let test_user = TestUser::create(&db_pool)
+        .await
+        .expect("Failed to create test user.");
     let test_app = TestApp {
         address: format!("http://localhost:{}", application_port),
         port: application_port,
-        db_pool: get_connection_pool(&configuration.database),
+        db_pool,
         email_server,
-        test_user: TestUser::generate(),
+        test_user,
         api_client: client,
         email_client: configuration.email_client.client(),
     };
-
-    test_app.test_user.store(&test_app.db_pool).await;
 
     test_app
 }
@@ -222,16 +224,37 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
 pub struct TestUser {
     pub username: String,
     pub password: String,
-    pub email: String,
+    pub user_id: Uuid,
 }
 
 impl TestUser {
-    pub fn generate() -> Self {
-        Self {
+    pub async fn create(pool: &PgPool) -> Result<Self, &str> {
+        let password: String = Uuid::new_v4().to_string();
+        let new_user: NewUser = NewUserData {
             username: Uuid::new_v4().to_string(),
-            password: Uuid::new_v4().to_string(),
+            password: Secret::from(password.clone()),
             email: SafeEmail().fake(),
         }
+        .try_into()
+        .expect("Failed to initialize new user.");
+        let mut transaction = pool
+            .begin()
+            .await
+            .expect("Failed to begin database transaction.");
+        let new_user = new_user
+            .store(&mut transaction)
+            .await
+            .expect("Failed to store test user.");
+        transaction
+            .commit()
+            .await
+            .expect("Failed to commit database transaction.");
+
+        Ok(Self {
+            username: new_user.username,
+            password,
+            user_id: new_user.user_id,
+        })
     }
 
     pub async fn login(&self, app: &TestApp) {
@@ -240,27 +263,5 @@ impl TestUser {
             "password": &self.password
         }))
         .await;
-    }
-
-    async fn store(&self, pool: &PgPool) {
-        let new_user: NewUser = NewUserData {
-            username: self.username.clone(),
-            email: self.email.clone(),
-            password: Secret::from(self.password.clone()),
-        }
-        .try_into()
-        .expect("Failed to initialize new user.");
-        let mut transaction = pool
-            .begin()
-            .await
-            .expect("Failed to begin database transaction.");
-        new_user
-            .store(&mut transaction)
-            .await
-            .expect("Failed to store test user.");
-        transaction
-            .commit()
-            .await
-            .expect("Failed to commit database transaction.");
     }
 }
