@@ -49,6 +49,35 @@ impl NewsletterIssue {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct NewsletterIssueAPI {
+    pub content: String,
+    pub description: String,
+    pub html_content: String,
+    pub newsletter_issue_id: Uuid,
+    pub published_at: Option<DateTime<Utc>>,
+    pub slug: String,
+    pub title: String,
+    pub user_id: Uuid,
+}
+
+impl From<NewsletterIssue> for NewsletterIssueAPI {
+    fn from(newsletter_issue: NewsletterIssue) -> Self {
+        let html_content = markdown::to_html(&newsletter_issue.content);
+
+        Self {
+            content: newsletter_issue.content,
+            description: newsletter_issue.description,
+            html_content: html_content,
+            newsletter_issue_id: newsletter_issue.newsletter_issue_id,
+            published_at: newsletter_issue.published_at,
+            slug: newsletter_issue.slug,
+            title: newsletter_issue.title,
+            user_id: newsletter_issue.user_id,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct NewsletterIssueEmail {
     pub description: String,
     pub html_content: String,
@@ -181,5 +210,93 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
             slug: slug::slugify(title.as_ref()),
             title: title.as_ref().to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::{
+        NewNewsletterIssue, NewNewsletterIssueData, NewsletterIssue, NewsletterIssueAPI,
+        NewsletterIssueEmail,
+    };
+    use chrono::Utc;
+    use claims::{assert_err, assert_ok};
+    use uuid::Uuid;
+
+    #[test]
+    fn valid_new_newsletter_issue_data_can_convert_into_newsletter_issue() {
+        let test_newsletter_issue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula Le Guin"),
+        };
+
+        assert_ok!(NewNewsletterIssue::try_from(test_newsletter_issue));
+    }
+
+    #[test]
+    fn invalid_new_newsletter_issue_data_cannot_convert_into_newsletter_issue() {
+        let test_newsletter_issue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula>Le Guin"),
+        };
+
+        assert_err!(NewNewsletterIssue::try_from(test_newsletter_issue));
+    }
+
+    #[test]
+    fn newsletter_issue_api_correctly_parses_and_sanitizes_content() {
+        let new_newsletter_issue: NewNewsletterIssue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula Le Guin"),
+        }
+        .try_into()
+        .unwrap();
+        let newsletter_issue_api = NewsletterIssueAPI::from(NewsletterIssue {
+            content: new_newsletter_issue.content,
+            created_at: Utc::now(),
+            description: new_newsletter_issue.description,
+            newsletter_issue_id: new_newsletter_issue.newsletter_issue_id,
+            published_at: Some(Utc::now()),
+            slug: new_newsletter_issue.slug,
+            title: new_newsletter_issue.title,
+            user_id: Uuid::new_v4(),
+        });
+
+        assert_eq!(newsletter_issue_api.slug, "ursula-le-guin");
+        assert_eq!(
+            newsletter_issue_api.html_content,
+            "<h2>Newsletter content</h2>"
+        );
+    }
+
+    #[test]
+    fn newsletter_issue_email_correctly_parses_and_sanitizes_content() {
+        let new_newsletter_issue: NewNewsletterIssue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula Le Guin"),
+        }
+        .try_into()
+        .unwrap();
+        let newsletter_issue_email = NewsletterIssueEmail::from(NewsletterIssue {
+            content: new_newsletter_issue.content,
+            created_at: Utc::now(),
+            description: new_newsletter_issue.description,
+            newsletter_issue_id: new_newsletter_issue.newsletter_issue_id,
+            published_at: Some(Utc::now()),
+            slug: new_newsletter_issue.slug,
+            title: new_newsletter_issue.title,
+            user_id: Uuid::new_v4(),
+        });
+
+        assert_eq!(newsletter_issue_email.slug, "ursula-le-guin");
+        assert_eq!(
+            newsletter_issue_email.html_content,
+            "<h2>Newsletter content</h2>"
+        );
+        assert_eq!(newsletter_issue_email.text_content, "Newsletter content");
     }
 }
