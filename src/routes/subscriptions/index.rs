@@ -16,34 +16,41 @@ use uuid::Uuid;
 pub struct SubscribeParams {
     email: String,
     name: String,
+    user_id: Uuid,
 }
 
 impl TryFrom<SubscribeParams> for NewSubscriber {
     type Error = String;
 
-    fn try_from(value: SubscribeParams) -> Result<Self, Self::Error> {
-        let name = SubscriberName::parse(value.name)?;
-        let email = SubscriberEmail::parse(value.email)?;
-        Ok(Self { email, name })
+    fn try_from(params: SubscribeParams) -> Result<Self, Self::Error> {
+        let name = SubscriberName::parse(params.name)?;
+        let email = SubscriberEmail::parse(params.email)?;
+        let user_id = params.user_id;
+
+        Ok(Self {
+            email,
+            name,
+            user_id,
+        })
     }
 }
 
 #[post("/subscriptions")]
 #[tracing::instrument(
     name = "Adding a new subscriber",
-    skip(form, pool, email_client, base_url),
+    skip(params, pool, email_client, base_url),
     fields(
-        subscriber_email = %form.email,
-        subscriber_name = %form.name
+        subscriber_email = %params.email,
+        subscriber_name = %params.name
     )
 )]
 pub async fn post(
-    form: web::Json<SubscribeParams>,
+    params: web::Json<SubscribeParams>,
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, actix_web::Error> {
-    let new_subscriber = form.0.try_into().map_err(e400)?;
+    let new_subscriber = params.0.try_into().map_err(e400)?;
     let mut transaction = pool
         .begin()
         .await
@@ -120,17 +127,27 @@ async fn insert_subscriber(
     new_subscriber: &NewSubscriber,
 ) -> Result<Uuid, sqlx::Error> {
     let subscriber_id = Uuid::new_v4();
-    let query = sqlx::query!(
-        r#"
-    INSERT INTO subscriptions (id, email, name, subscribed_at, status)
-    VALUES ($1, $2, $3, $4, 'pending_confirmation')
+    transaction
+        .execute(sqlx::query!(
+            r#"
+              INSERT INTO subscriptions (
+                id,
+                email,
+                name,
+                subscribed_at,
+                status,
+                user_id
+              )
+              VALUES ($1, $2, $3, $4, 'pending_confirmation', $5)
             "#,
-        subscriber_id,
-        new_subscriber.email.as_ref(),
-        new_subscriber.name.as_ref(),
-        Utc::now()
-    );
-    transaction.execute(query).await?;
+            subscriber_id,
+            new_subscriber.email.as_ref(),
+            new_subscriber.name.as_ref(),
+            Utc::now(),
+            new_subscriber.user_id
+        ))
+        .await?;
+
     Ok(subscriber_id)
 }
 
@@ -143,15 +160,18 @@ async fn store_token(
     subscriber_id: Uuid,
     subscription_token: &str,
 ) -> Result<(), StoreTokenError> {
-    let query = sqlx::query!(
-        r#"
-    INSERT INTO subscription_tokens (subscription_token, subscriber_id)
-    VALUES ($1, $2)
-        "#,
-        subscription_token,
-        subscriber_id
-    );
-    transaction.execute(query).await.map_err(StoreTokenError)?;
+    transaction
+        .execute(sqlx::query!(
+            r#"
+              INSERT INTO subscription_tokens (subscription_token, subscriber_id)
+              VALUES ($1, $2)
+            "#,
+            subscription_token,
+            subscriber_id
+        ))
+        .await
+        .map_err(StoreTokenError)?;
+
     Ok(())
 }
 
