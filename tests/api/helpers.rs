@@ -188,6 +188,18 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    pub async fn put_admin_update_user<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .put(&format!("{}/admin/user", &self.address))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
     pub async fn get_authenticate(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/admin/authenticate", &self.address))
