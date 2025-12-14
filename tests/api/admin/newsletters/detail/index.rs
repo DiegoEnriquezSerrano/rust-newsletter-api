@@ -209,7 +209,7 @@ async fn newsletter_update_returns_400_for_missing_fields() {
 }
 
 #[tokio::test]
-async fn newsletter_update_returns_400_for_invalid_fields() {
+async fn draft_newsletter_update_returns_400_for_invalid_fields() {
     let app = spawn_app().await;
     app.test_user.login(&app).await;
     app.post_admin_create_newsletter(&serde_json::json!({
@@ -253,11 +253,92 @@ async fn newsletter_update_returns_400_for_invalid_fields() {
         (
             serde_json::json!({
               "title": "Newsletter title",
-              "description": " ",
+              "description": "a".repeat(201),
               "content": "## Newsletter content",
             }),
-            "A description is required.",
-            "empty description",
+            "Description exceeds character limit.",
+            "excessively large description",
+        ),
+        (
+            serde_json::json!({
+              "title": "Newsletter title",
+              "description": "<p>Newsletter description</p>",
+              "content": "## Newsletter content",
+            }),
+            "Description includes illegal characters.",
+            "description with illegal characters",
+        ),
+    ];
+
+    for (invalid_body, error_message, test_case) in test_cases {
+        let response = app
+            .put_admin_update_newsletter(&newsletter_issue_id, &invalid_body)
+            .await;
+        assert_eq!(
+            400,
+            response.status().as_u16(),
+            "The API did not fail with 400 Bad Request when the condition was {test_case}.",
+        );
+        assert_eq!(
+            error_message,
+            response.json::<ResponseErrorMessage>().await.unwrap().error,
+            "The API did not respond with '{error_message}' when the condition was {test_case}.",
+        );
+    }
+}
+
+#[tokio::test]
+async fn newsletter_update_returns_400_for_invalid_fields() {
+    let app = spawn_app().await;
+    app.test_user.login(&app).await;
+    app.post_admin_create_newsletter(&serde_json::json!({
+      "title": "Newsletter title",
+      "description": "Newsletter description",
+      "content": "## Newsletter content",
+    }))
+    .await;
+
+    let response = app.get_admin_unpublished_newsletter_issues().await;
+    let response_body: Vec<NewsletterIssueAPI> = response.json().await.unwrap();
+    let newsletter_issue_id = response_body[0].newsletter_issue_id;
+
+    let response = app
+        .put_admin_publish_newsletter(
+            &newsletter_issue_id,
+            &serde_json::json!({
+              "idempotency_key": uuid::Uuid::new_v4().to_string()
+            }),
+        )
+        .await;
+    assert_eq!(200, response.status().as_u16());
+
+    let test_cases = vec![
+        (
+            serde_json::json!({
+              "title": " ",
+              "description": "Newsletter description",
+              "content": "## Newsletter content",
+            }),
+            "A title is required.",
+            "empty title",
+        ),
+        (
+            serde_json::json!({
+              "title": "a".repeat(71),
+              "description": "Newsletter description",
+              "content": "## Newsletter content",
+            }),
+            "Title exceeds character limit.",
+            "excessively large title",
+        ),
+        (
+            serde_json::json!({
+              "title": "a</>a",
+              "description": "Newsletter description",
+              "content": "## Newsletter content",
+            }),
+            "Title includes illegal characters.",
+            "title with illegal characters",
         ),
         (
             serde_json::json!({
@@ -285,6 +366,15 @@ async fn newsletter_update_returns_400_for_invalid_fields() {
             }),
             "Content body is required.",
             "empty content",
+        ),
+        (
+            serde_json::json!({
+              "title": "Newsletter title",
+              "description": " ",
+              "content": "## Newsletter content",
+            }),
+            "A description is required.",
+            "empty description",
         ),
     ];
 
