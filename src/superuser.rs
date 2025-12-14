@@ -1,6 +1,6 @@
 use anyhow::Result;
 use newsletter_api::configuration::get_configuration;
-use newsletter_api::models::{NewUser, NewUserData};
+use newsletter_api::models::{NewUser, NewUserData, UserProfile};
 use newsletter_api::startup::get_connection_pool;
 use secrecy::Secret;
 use std::io::{self, Write};
@@ -52,6 +52,10 @@ async fn main() -> Result<()> {
             .store(&mut transaction)
             .await
             .expect("Failed to store user.");
+        UserProfile::initialize(&user.user_id)
+            .insert(&mut transaction)
+            .await
+            .expect("Failed to create user profile");
         transaction
             .commit()
             .await

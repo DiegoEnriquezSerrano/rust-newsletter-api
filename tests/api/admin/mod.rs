@@ -1,1 +1,2 @@
 mod newsletters;
+mod user;

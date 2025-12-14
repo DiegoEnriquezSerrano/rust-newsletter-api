@@ -4,7 +4,7 @@ use fake::faker::name::en::Name;
 use newsletter_api::configuration::{DatabaseSettings, get_configuration};
 use newsletter_api::email_client::EmailClient;
 use newsletter_api::issue_delivery_worker::{ExecutionOutcome, try_execute_task};
-use newsletter_api::models::{NewUser, NewUserData};
+use newsletter_api::models::{NewUser, NewUserData, UserProfile};
 use newsletter_api::startup::{Application, get_connection_pool};
 use newsletter_api::telemetry::{get_subscriber, init_subscriber};
 use secrecy::Secret;
@@ -174,6 +174,26 @@ impl TestApp {
                 "{}/admin/newsletters/{}",
                 &self.address, newsletter_issue_id
             ))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_admin_user(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/user", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn put_admin_update_user<Body>(&self, body: &Body) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .put(&format!("{}/admin/user", &self.address))
             .json(body)
             .send()
             .await
@@ -363,6 +383,10 @@ impl TestUser {
             .store(&mut transaction)
             .await
             .expect("Failed to store test user.");
+        UserProfile::initialize(&new_user.user_id)
+            .insert(&mut transaction)
+            .await
+            .unwrap();
         transaction
             .commit()
             .await
