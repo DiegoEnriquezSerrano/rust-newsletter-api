@@ -1,8 +1,9 @@
-use crate::domain::newsletter_issue::{Description, Title};
+use crate::domain::newsletter_issue::{Content, Description, Title};
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{Executor, PgPool, Postgres, Transaction, postgres::PgRow};
+use sqlx::postgres::PgRow;
+use sqlx::{Executor, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 use voca_rs::strip;
 
@@ -18,7 +19,85 @@ pub struct NewsletterIssue {
     pub user_id: Uuid,
 }
 
+impl TryFrom<PgRow> for NewsletterIssue {
+    type Error = sqlx::Error;
+
+    fn try_from(row: PgRow) -> Result<Self, Self::Error> {
+        Ok(Self {
+            content: row.try_get("content")?,
+            created_at: row.try_get("created_at")?,
+            description: row.try_get("description")?,
+            newsletter_issue_id: row.try_get("newsletter_issue_id")?,
+            published_at: row.try_get("published_at")?,
+            slug: row.try_get("slug")?,
+            title: row.try_get("title")?,
+            user_id: row.try_get("user_id")?,
+        })
+    }
+}
+
 impl NewsletterIssue {
+    pub async fn find_by_user_id_and_newsletter_issue_id(
+        user_id: Uuid,
+        newsletter_issue_id: &Uuid,
+        pool: &PgPool,
+    ) -> Result<Self, sqlx::Error> {
+        let newsletter_issue = sqlx::query_as!(
+            NewsletterIssue,
+            r#"
+              SELECT
+                content,
+                created_at,
+                description,
+                newsletter_issue_id,
+                published_at,
+                slug,
+                title,
+                user_id
+              FROM newsletter_issues
+              WHERE user_id = $1 AND newsletter_issue_id = $2
+              LIMIT 1
+            "#,
+            user_id,
+            newsletter_issue_id
+        )
+        .fetch_one(pool)
+        .await?;
+
+        Ok(newsletter_issue)
+    }
+
+    pub async fn find_by_user_id_and_newsletter_issue_id_txn(
+        user_id: Uuid,
+        newsletter_issue_id: &Uuid,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<Self, sqlx::Error> {
+        let newsletter_issue: NewsletterIssue = transaction
+            .fetch_one(sqlx::query_as!(
+                NewsletterIssue,
+                r#"
+                  SELECT
+                    content,
+                    created_at,
+                    description,
+                    newsletter_issue_id,
+                    published_at,
+                    slug,
+                    title,
+                    user_id
+                  FROM newsletter_issues
+                  WHERE user_id = $1 AND newsletter_issue_id = $2
+                  LIMIT 1
+                "#,
+                user_id,
+                newsletter_issue_id
+            ))
+            .await?
+            .try_into()?;
+
+        Ok(newsletter_issue)
+    }
+
     pub async fn find_by_newsletter_issue_id(
         newsletter_issue_id: Uuid,
         db_pool: &PgPool,
@@ -45,6 +124,130 @@ impl NewsletterIssue {
         .await?;
 
         Ok(issue)
+    }
+
+    pub async fn get_published_by_user_id(
+        user_id: Uuid,
+        pool: &PgPool,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        let newsletter_issues = sqlx::query_as!(
+            NewsletterIssue,
+            r#"
+              SELECT
+                content,
+                created_at,
+                description,
+                newsletter_issue_id,
+                published_at,
+                slug,
+                title,
+                user_id
+              FROM newsletter_issues
+              WHERE user_id = $1 AND published_at IS NOT NULL
+              ORDER BY published_at DESC
+              LIMIT 10
+            "#,
+            user_id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(newsletter_issues)
+    }
+
+    pub async fn get_unpublished_by_user_id(
+        user_id: Uuid,
+        pool: &PgPool,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        let newsletter_issues = sqlx::query_as!(
+            NewsletterIssue,
+            r#"
+              SELECT
+                content,
+                created_at,
+                description,
+                newsletter_issue_id,
+                published_at,
+                slug,
+                title,
+                user_id
+              FROM newsletter_issues
+              WHERE user_id = $1 AND published_at IS NULL
+              ORDER BY created_at DESC
+              LIMIT 10
+            "#,
+            user_id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(newsletter_issues)
+    }
+
+    pub async fn publish_newsletter(
+        self,
+        transaction: &mut Transaction<'_, Postgres>,
+    ) -> Result<Uuid, sqlx::Error> {
+        transaction
+            .execute(sqlx::query!(
+                r#"
+                  UPDATE newsletter_issues
+                  SET published_at = now()
+                  WHERE newsletter_issue_id = $1
+                    AND user_id = $2
+                "#,
+                &self.newsletter_issue_id,
+                self.user_id,
+            ))
+            .await?;
+
+        Ok(self.newsletter_issue_id)
+    }
+
+    pub fn validate_for_publish(self) -> Result<Self, String> {
+        let content = Content::parse(self.content)?;
+        let description = Description::parse(self.description)?;
+        let title = Title::parse(self.title)?;
+
+        Ok(Self {
+            content: content.as_ref().to_string(),
+            created_at: self.created_at,
+            description: description.as_ref().to_string(),
+            newsletter_issue_id: self.newsletter_issue_id,
+            published_at: self.published_at,
+            slug: self.slug,
+            title: title.as_ref().to_string(),
+            user_id: self.user_id,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NewsletterIssueAPI {
+    pub content: String,
+    pub description: String,
+    pub html_content: String,
+    pub newsletter_issue_id: Uuid,
+    pub published_at: Option<DateTime<Utc>>,
+    pub slug: String,
+    pub title: String,
+    pub user_id: Uuid,
+}
+
+impl From<NewsletterIssue> for NewsletterIssueAPI {
+    fn from(newsletter_issue: NewsletterIssue) -> Self {
+        let html_content = markdown::to_html(&newsletter_issue.content);
+
+        Self {
+            content: newsletter_issue.content,
+            description: newsletter_issue.description,
+            html_content,
+            newsletter_issue_id: newsletter_issue.newsletter_issue_id,
+            published_at: newsletter_issue.published_at,
+            slug: newsletter_issue.slug,
+            title: newsletter_issue.title,
+            user_id: newsletter_issue.user_id,
+        }
     }
 }
 
@@ -144,7 +347,7 @@ impl NewNewsletterIssue {
                     title,
                     user_id
                   )
-                  VALUES ($1, now(), $2, $3, now(), $4, $5, $6)
+                  VALUES ($1, now(), $2, $3, NULL, $4, $5, $6)
                 "#,
                 self.content,
                 self.description,
@@ -170,7 +373,7 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
     type Error = String;
 
     fn try_from(data: NewNewsletterIssueData) -> Result<NewNewsletterIssue, String> {
-        let description = Description::parse(data.description)?;
+        let description = Description::parse_draft(data.description)?;
         let newsletter_issue_id = Uuid::new_v4();
         let title = Title::parse(data.title)?;
 
@@ -181,5 +384,93 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
             slug: slug::slugify(title.as_ref()),
             title: title.as_ref().to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::models::{
+        NewNewsletterIssue, NewNewsletterIssueData, NewsletterIssue, NewsletterIssueAPI,
+        NewsletterIssueEmail,
+    };
+    use chrono::Utc;
+    use claims::{assert_err, assert_ok};
+    use uuid::Uuid;
+
+    #[test]
+    fn valid_new_newsletter_issue_data_can_convert_into_newsletter_issue() {
+        let test_newsletter_issue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula Le Guin"),
+        };
+
+        assert_ok!(NewNewsletterIssue::try_from(test_newsletter_issue));
+    }
+
+    #[test]
+    fn invalid_new_newsletter_issue_data_cannot_convert_into_newsletter_issue() {
+        let test_newsletter_issue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula>Le Guin"),
+        };
+
+        assert_err!(NewNewsletterIssue::try_from(test_newsletter_issue));
+    }
+
+    #[test]
+    fn newsletter_issue_api_correctly_parses_and_sanitizes_content() {
+        let new_newsletter_issue: NewNewsletterIssue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula Le Guin"),
+        }
+        .try_into()
+        .unwrap();
+        let newsletter_issue_api = NewsletterIssueAPI::from(NewsletterIssue {
+            content: new_newsletter_issue.content,
+            created_at: Utc::now(),
+            description: new_newsletter_issue.description,
+            newsletter_issue_id: new_newsletter_issue.newsletter_issue_id,
+            published_at: Some(Utc::now()),
+            slug: new_newsletter_issue.slug,
+            title: new_newsletter_issue.title,
+            user_id: Uuid::new_v4(),
+        });
+
+        assert_eq!(newsletter_issue_api.slug, "ursula-le-guin");
+        assert_eq!(
+            newsletter_issue_api.html_content,
+            "<h2>Newsletter content</h2>"
+        );
+    }
+
+    #[test]
+    fn newsletter_issue_email_correctly_parses_and_sanitizes_content() {
+        let new_newsletter_issue: NewNewsletterIssue = NewNewsletterIssueData {
+            content: String::from("## Newsletter content"),
+            description: String::from("Newsletter description"),
+            title: String::from("Ursula Le Guin"),
+        }
+        .try_into()
+        .unwrap();
+        let newsletter_issue_email = NewsletterIssueEmail::from(NewsletterIssue {
+            content: new_newsletter_issue.content,
+            created_at: Utc::now(),
+            description: new_newsletter_issue.description,
+            newsletter_issue_id: new_newsletter_issue.newsletter_issue_id,
+            published_at: Some(Utc::now()),
+            slug: new_newsletter_issue.slug,
+            title: new_newsletter_issue.title,
+            user_id: Uuid::new_v4(),
+        });
+
+        assert_eq!(newsletter_issue_email.slug, "ursula-le-guin");
+        assert_eq!(
+            newsletter_issue_email.html_content,
+            "<h2>Newsletter content</h2>"
+        );
+        assert_eq!(newsletter_issue_email.text_content, "Newsletter content");
     }
 }

@@ -1,5 +1,6 @@
 use fake::Fake;
 use fake::faker::internet::en::SafeEmail;
+use fake::faker::name::en::Name;
 use newsletter_api::configuration::{DatabaseSettings, get_configuration};
 use newsletter_api::email_client::EmailClient;
 use newsletter_api::issue_delivery_worker::{ExecutionOutcome, try_execute_task};
@@ -10,7 +11,8 @@ use secrecy::Secret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use std::sync::LazyLock;
 use uuid::Uuid;
-use wiremock::MockServer;
+use wiremock::matchers::{method, path};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 // Ensure that the `tracing` stack is only initialised once using `once_cell`
 static TRACING: LazyLock<()> = LazyLock::new(|| {
@@ -98,12 +100,61 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
-    pub async fn post_publish_newsletter<Body>(&self, body: &Body) -> reqwest::Response
+    pub async fn get_admin_newsletter_issues(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/newsletters", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_admin_unpublished_newsletter_issues(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/newsletters/drafts", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_admin_newsletter_issue(
+        &self,
+        newsletter_issue_id: &Uuid,
+    ) -> reqwest::Response {
+        self.api_client
+            .get(&format!(
+                "{}/admin/newsletters/{}",
+                &self.address, newsletter_issue_id
+            ))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn post_admin_create_newsletter<Body>(&self, body: &Body) -> reqwest::Response
     where
         Body: serde::Serialize,
     {
         self.api_client
             .post(&format!("{}/admin/newsletters", &self.address))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn put_admin_publish_newsletter<Body>(
+        &self,
+        newsletter_issue_id: &Uuid,
+        body: &Body,
+    ) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .put(&format!(
+                "{}/admin/newsletter/{}/publish",
+                &self.address, newsletter_issue_id
+            ))
             .json(body)
             .send()
             .await
@@ -116,6 +167,54 @@ impl TestApp {
             .send()
             .await
             .expect("Failed to execute request.")
+    }
+
+    pub async fn create_unconfirmed_subscriber(
+        &self,
+        user_id: Option<Uuid>,
+        email: Option<String>,
+    ) -> ConfirmationLinks {
+        // We are working with multiple subscribers now,
+        // their details must be randomised to avoid conflicts!
+        let name: String = Name().fake();
+        let email: String = email.unwrap_or(SafeEmail().fake());
+        let user_id: Uuid = user_id.unwrap_or(self.test_user.user_id);
+        let body = &serde_json::json!({
+            "name": name,
+            "email": email,
+            "user_id": user_id
+        });
+
+        let _mock_guard = Mock::given(path("/email"))
+            .and(method("POST"))
+            .respond_with(ResponseTemplate::new(200))
+            .named("Create unconfirmed subscriber")
+            .expect(1)
+            .mount_as_scoped(&self.email_server)
+            .await;
+        self.post_subscriptions(body)
+            .await
+            .error_for_status()
+            .unwrap();
+
+        let email_request = self
+            .email_server
+            .received_requests()
+            .await
+            .unwrap()
+            .pop()
+            .unwrap();
+        self.get_confirmation_links(&email_request)
+    }
+
+    pub async fn create_confirmed_subscriber(&self, user_id: Option<Uuid>, email: Option<String>) {
+        let confirmation_link = self.create_unconfirmed_subscriber(user_id, email).await;
+
+        self.api_client
+            .put(confirmation_link.html)
+            .send()
+            .await
+            .expect("Failed to confirm subscriber.");
     }
 
     /// Extract the confirmation links embedded in the request to the email API.
