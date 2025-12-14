@@ -4,7 +4,7 @@ use fake::faker::name::en::Name;
 use newsletter_api::configuration::{DatabaseSettings, get_configuration};
 use newsletter_api::email_client::EmailClient;
 use newsletter_api::issue_delivery_worker::{ExecutionOutcome, try_execute_task};
-use newsletter_api::models::{NewUser, NewUserData};
+use newsletter_api::models::{NewUser, NewUserData, UserProfile};
 use newsletter_api::startup::{Application, get_connection_pool};
 use newsletter_api::telemetry::{get_subscriber, init_subscriber};
 use secrecy::Secret;
@@ -363,6 +363,10 @@ impl TestUser {
             .store(&mut transaction)
             .await
             .expect("Failed to store test user.");
+        UserProfile::initialize(&new_user.user_id)
+            .insert(&mut transaction)
+            .await
+            .unwrap();
         transaction
             .commit()
             .await

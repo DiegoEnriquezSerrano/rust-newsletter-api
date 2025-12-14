@@ -12,6 +12,15 @@ pub struct UserProfile {
 }
 
 impl UserProfile {
+    pub fn initialize(user_id: &Uuid) -> Self {
+        Self {
+            bio: "".to_string(),
+            description: "".to_string(),
+            display_name: "".to_string(),
+            user_id: *user_id,
+        }
+    }
+
     pub fn validate(self) -> Result<UserProfile, String> {
         let description = Description::parse(self.description)?.as_ref().to_string();
         let display_name = DisplayName::parse(self.display_name)?.as_ref().to_string();
