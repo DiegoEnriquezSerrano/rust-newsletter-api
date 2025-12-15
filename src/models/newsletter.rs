@@ -248,7 +248,7 @@ impl NewsletterIssue {
                   users.username,
                   user_profiles.display_name,
                   user_profiles.description
-                ) as "user!: AssociatedUser"
+                ) AS "user!: AssociatedUser"
               FROM newsletter_issues
               JOIN users ON newsletter_issues.user_id = users.user_id
               JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id
@@ -273,7 +273,7 @@ impl NewsletterIssue {
             PublicNewsletter,
             r#"
               SELECT
-                newsletter_issues.content,
+                '' AS "content!: String",
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -282,7 +282,7 @@ impl NewsletterIssue {
                   users.username,
                   user_profiles.display_name,
                   user_profiles.description
-                ) as "user!: AssociatedUser"
+                ) AS "user!: AssociatedUser"
               FROM newsletter_issues
               JOIN users ON newsletter_issues.user_id = users.user_id
               JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id
@@ -305,7 +305,7 @@ impl NewsletterIssue {
             PublicNewsletter,
             r#"
               SELECT
-                newsletter_issues.content,
+                '' AS "content!: String",
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -314,7 +314,7 @@ impl NewsletterIssue {
                   users.username,
                   user_profiles.display_name,
                   user_profiles.description
-                ) as "user!: AssociatedUser"
+                ) AS "user!: AssociatedUser"
               FROM newsletter_issues
               JOIN users ON newsletter_issues.user_id = users.user_id
               JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id

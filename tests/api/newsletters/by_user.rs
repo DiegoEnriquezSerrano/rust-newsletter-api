@@ -54,4 +54,5 @@ async fn retuns_published_public_newsletters_by_user() {
         .await;
     let response_body: Vec<PublicNewsletter> = response.json().await.unwrap();
     assert_eq!("Newsletter title", response_body[0].title);
+    assert_eq!("", response_body[0].content);
 }
