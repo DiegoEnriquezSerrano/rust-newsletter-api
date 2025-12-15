@@ -103,6 +103,7 @@ async fn run(
             .service(health_check::get)
             .service(login::post)
             .service(newsletters::get)
+            .service(newsletters::detail::get)
             .service(newsletters::by_user::get)
             .service(subscriptions::confirm::put)
             .service(subscriptions::post)

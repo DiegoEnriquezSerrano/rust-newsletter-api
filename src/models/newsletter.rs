@@ -230,6 +230,42 @@ impl NewsletterIssue {
         Ok(self.newsletter_issue_id)
     }
 
+    pub async fn find_public_newsletter(
+        username: String,
+        slug: String,
+        db_pool: &PgPool,
+    ) -> Result<PublicNewsletter, sqlx::Error> {
+        let newsletter = sqlx::query_as!(
+            PublicNewsletter,
+            r#"
+              SELECT
+                newsletter_issues.content,
+                newsletter_issues.description,
+                newsletter_issues.published_at,
+                newsletter_issues.slug,
+                newsletter_issues.title,
+                (
+                  users.username,
+                  user_profiles.display_name,
+                  user_profiles.description
+                ) as "user!: AssociatedUser"
+              FROM newsletter_issues
+              JOIN users ON newsletter_issues.user_id = users.user_id
+              JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id
+              WHERE newsletter_issues.published_at IS NOT NULL
+                AND users.username = $1
+                AND newsletter_issues.slug = $2
+              LIMIT 1
+            "#,
+            username,
+            slug
+        )
+        .fetch_one(db_pool)
+        .await?;
+
+        Ok(newsletter)
+    }
+
     pub async fn get_public_newsletters(
         db_pool: &PgPool,
     ) -> Result<Vec<PublicNewsletter>, sqlx::Error> {
