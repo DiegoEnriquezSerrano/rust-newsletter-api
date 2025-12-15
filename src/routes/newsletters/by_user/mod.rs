@@ -1,5 +1,3 @@
 mod index;
 
-pub mod by_user;
-
 pub use index::*;
