@@ -1,7 +1,8 @@
 use crate::domain::newsletter_issue::{Content, Description, Title};
+use crate::models::AssociatedUser;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use sqlx::postgres::PgRow;
 use sqlx::{Executor, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -410,6 +411,21 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
             title: title.as_ref().to_string(),
         })
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PublicNewsletter {
+    #[serde(serialize_with = "serialize_html_content")]
+    pub content: String,
+    pub description: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub slug: String,
+    pub title: String,
+    pub user: AssociatedUser,
+}
+
+fn serialize_html_content<S: Serializer>(content: &str, serializer: S) -> Result<S::Ok, S::Error> {
+    markdown::to_html(content).serialize(serializer)
 }
 
 #[cfg(test)]

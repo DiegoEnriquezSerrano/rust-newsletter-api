@@ -1,6 +1,6 @@
 use crate::domain::user_profile::{Description, DisplayName};
 use serde::{Deserialize, Serialize};
-use sqlx::{Executor, PgPool, Postgres, Transaction};
+use sqlx::{Executor, PgPool, Postgres, Transaction, Type};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -118,6 +118,13 @@ pub struct UserProfileAPI {
     pub display_name: String,
     pub username: String,
     pub total_issues: Option<i64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Type)]
+pub struct AssociatedUser {
+    pub description: String,
+    pub display_name: String,
+    pub username: String,
 }
 
 #[cfg(test)]
