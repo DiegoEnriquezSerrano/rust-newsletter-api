@@ -1,5 +1,5 @@
 use crate::helpers::spawn_app;
-use newsletter_api::models::{NewsletterIssueAPI, PublicNewsletter};
+use newsletter_api::models::{NewsletterIssueAPI, PublicNewsletterListItem};
 
 #[tokio::test]
 async fn returns_ok_for_non_existing_username() {
@@ -52,7 +52,6 @@ async fn retuns_published_public_newsletters_by_user() {
     let response = app
         .get_public_newsletters_by_user(&app.test_user.username)
         .await;
-    let response_body: Vec<PublicNewsletter> = response.json().await.unwrap();
+    let response_body: Vec<PublicNewsletterListItem> = response.json().await.unwrap();
     assert_eq!("Newsletter title", response_body[0].title);
-    assert_eq!("", response_body[0].content);
 }

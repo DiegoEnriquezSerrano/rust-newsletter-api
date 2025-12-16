@@ -6,6 +6,7 @@ use anyhow::Context;
 use sqlx::PgPool;
 
 #[get("/newsletters/by_user/{username}/issue/{slug}")]
+#[tracing::instrument(name = "Retrieving published newsletter", skip_all)]
 pub async fn get(
     pool: web::Data<PgPool>,
     path: web::Path<(String, String)>,

@@ -268,12 +268,11 @@ impl NewsletterIssue {
 
     pub async fn get_public_newsletters(
         db_pool: &PgPool,
-    ) -> Result<Vec<PublicNewsletter>, sqlx::Error> {
+    ) -> Result<Vec<PublicNewsletterListItem>, sqlx::Error> {
         let public_newsletters = sqlx::query_as!(
-            PublicNewsletter,
+            PublicNewsletterListItem,
             r#"
               SELECT
-                '' AS "content!: String",
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -300,12 +299,11 @@ impl NewsletterIssue {
     pub async fn get_public_newsletters_by_username(
         username: String,
         db_pool: &PgPool,
-    ) -> Result<Vec<PublicNewsletter>, sqlx::Error> {
+    ) -> Result<Vec<PublicNewsletterListItem>, sqlx::Error> {
         let public_newsletters = sqlx::query_as!(
-            PublicNewsletter,
+            PublicNewsletterListItem,
             r#"
               SELECT
-                '' AS "content!: String",
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -527,6 +525,15 @@ pub struct PublicNewsletter {
 
 fn serialize_html_content<S: Serializer>(content: &str, serializer: S) -> Result<S::Ok, S::Error> {
     markdown::to_html(content).serialize(serializer)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PublicNewsletterListItem {
+    pub description: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub slug: String,
+    pub title: String,
+    pub user: AssociatedUser,
 }
 
 #[cfg(test)]

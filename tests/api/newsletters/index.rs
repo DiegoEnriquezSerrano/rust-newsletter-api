@@ -2,7 +2,7 @@ use crate::helpers::spawn_app;
 use fake::Fake;
 use fake::faker::internet::en::SafeEmail;
 use newsletter_api::models::{
-    NewUser, NewUserData, NewsletterIssueAPI, PublicNewsletter, UserProfile,
+    NewUser, NewUserData, NewsletterIssueAPI, PublicNewsletterListItem, UserProfile,
 };
 use secrecy::Secret;
 
@@ -13,7 +13,7 @@ async fn unauthenticated_user_can_get_published_timeline_newsletter_issues() {
     let response = app.get_public_newsletters().await;
     assert_eq!(200, response.status().as_u16());
 
-    let response_body: Vec<PublicNewsletter> = response.json().await.unwrap();
+    let response_body: Vec<PublicNewsletterListItem> = response.json().await.unwrap();
     assert_eq!(response_body.is_empty(), true);
 }
 
@@ -67,7 +67,7 @@ async fn published_timeline_newsletters_are_listed_by_published_at() {
     assert_eq!(200, response.status().as_u16());
 
     let response = app.get_public_newsletters().await;
-    let response_body: Vec<PublicNewsletter> = response.json().await.unwrap();
+    let response_body: Vec<PublicNewsletterListItem> = response.json().await.unwrap();
 
     assert_eq!("Newsletter title 0", response_body[0].title);
     assert_eq!("Newsletter title 1", response_body[1].title);
@@ -159,7 +159,7 @@ async fn all_users_published_timeline_newsletters_are_listed() {
 
     // Act 6 - Get public newsletter issues as unauthenticated user
     let response = app.get_public_newsletters().await;
-    let response_body: Vec<PublicNewsletter> = response
+    let response_body: Vec<PublicNewsletterListItem> = response
         .json()
         .await
         .expect("Failed to serialize public newsletter issues.");
