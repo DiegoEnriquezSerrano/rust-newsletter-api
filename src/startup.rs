@@ -1,7 +1,7 @@
 use crate::authentication::reject_anonymous_users;
 use crate::configuration::{DatabaseSettings, Settings};
 use crate::email_client::EmailClient;
-use crate::routes::{admin, health_check, index, login, newsletters, subscriptions};
+use crate::routes::{admin, health_check, index, login, newsletters, subscriptions, users};
 use actix_session::SessionMiddleware;
 use actix_session::storage::RedisSessionStore;
 use actix_web::cookie::Key;
@@ -107,6 +107,7 @@ async fn run(
             .service(newsletters::by_user::get)
             .service(subscriptions::confirm::put)
             .service(subscriptions::post)
+            .service(users::get)
             .app_data(db_pool.clone())
             .app_data(email_client.clone())
             .app_data(base_url.clone())

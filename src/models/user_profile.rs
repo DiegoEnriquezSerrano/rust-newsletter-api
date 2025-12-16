@@ -195,6 +195,7 @@ fn serialize_bio<S: Serializer>(bio: &str, serializer: S) -> Result<S::Ok, S::Er
     markdown::to_html(bio).serialize(serializer)
 }
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct PublicProfileListItem {
     pub description: String,
     pub display_name: String,
