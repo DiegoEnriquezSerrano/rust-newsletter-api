@@ -1,7 +1,8 @@
 use crate::domain::newsletter_issue::{Content, Description, Title};
+use crate::models::AssociatedUser;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use sqlx::postgres::PgRow;
 use sqlx::{Executor, PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
@@ -229,6 +230,99 @@ impl NewsletterIssue {
         Ok(self.newsletter_issue_id)
     }
 
+    pub async fn find_public_newsletter(
+        username: String,
+        slug: String,
+        db_pool: &PgPool,
+    ) -> Result<PublicNewsletter, sqlx::Error> {
+        sqlx::query_as!(
+            PublicNewsletter,
+            r#"
+              SELECT
+                newsletter_issues.content,
+                newsletter_issues.description,
+                newsletter_issues.published_at,
+                newsletter_issues.slug,
+                newsletter_issues.title,
+                (
+                  users.username,
+                  user_profiles.display_name,
+                  user_profiles.description
+                ) AS "user!: AssociatedUser"
+              FROM newsletter_issues
+              JOIN users ON newsletter_issues.user_id = users.user_id
+              JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id
+              WHERE newsletter_issues.published_at IS NOT NULL
+                AND users.username = $1
+                AND newsletter_issues.slug = $2
+              LIMIT 1
+            "#,
+            username,
+            slug
+        )
+        .fetch_one(db_pool)
+        .await
+    }
+
+    pub async fn get_public_newsletters(
+        db_pool: &PgPool,
+    ) -> Result<Vec<PublicNewsletterListItem>, sqlx::Error> {
+        sqlx::query_as!(
+            PublicNewsletterListItem,
+            r#"
+              SELECT
+                newsletter_issues.description,
+                newsletter_issues.published_at,
+                newsletter_issues.slug,
+                newsletter_issues.title,
+                (
+                  users.username,
+                  user_profiles.display_name,
+                  user_profiles.description
+                ) AS "user!: AssociatedUser"
+              FROM newsletter_issues
+              JOIN users ON newsletter_issues.user_id = users.user_id
+              JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id
+              WHERE newsletter_issues.published_at IS NOT NULL
+              ORDER BY published_at DESC
+              LIMIT 10
+            "#,
+        )
+        .fetch_all(db_pool)
+        .await
+    }
+
+    pub async fn get_public_newsletters_by_username(
+        username: String,
+        db_pool: &PgPool,
+    ) -> Result<Vec<PublicNewsletterListItem>, sqlx::Error> {
+        sqlx::query_as!(
+            PublicNewsletterListItem,
+            r#"
+              SELECT
+                newsletter_issues.description,
+                newsletter_issues.published_at,
+                newsletter_issues.slug,
+                newsletter_issues.title,
+                (
+                  users.username,
+                  user_profiles.display_name,
+                  user_profiles.description
+                ) AS "user!: AssociatedUser"
+              FROM newsletter_issues
+              JOIN users ON newsletter_issues.user_id = users.user_id
+              JOIN user_profiles ON newsletter_issues.user_id = user_profiles.user_id
+              WHERE newsletter_issues.published_at IS NOT NULL
+                AND users.username = $1
+              ORDER BY published_at DESC
+              LIMIT 10
+            "#,
+            username
+        )
+        .fetch_all(db_pool)
+        .await
+    }
+
     pub fn validate_for_publish(self) -> Result<Self, String> {
         let content = Content::parse(self.content)?;
         let description = Description::parse(self.description)?;
@@ -410,6 +504,30 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
             title: title.as_ref().to_string(),
         })
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PublicNewsletter {
+    #[serde(serialize_with = "serialize_html_content")]
+    pub content: String,
+    pub description: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub slug: String,
+    pub title: String,
+    pub user: AssociatedUser,
+}
+
+fn serialize_html_content<S: Serializer>(content: &str, serializer: S) -> Result<S::Ok, S::Error> {
+    markdown::to_html(content).serialize(serializer)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PublicNewsletterListItem {
+    pub description: String,
+    pub published_at: Option<DateTime<Utc>>,
+    pub slug: String,
+    pub title: String,
+    pub user: AssociatedUser,
 }
 
 #[cfg(test)]

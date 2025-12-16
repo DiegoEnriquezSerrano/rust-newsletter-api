@@ -200,6 +200,56 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    pub async fn get_public_newsletters(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/newsletters", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_public_newsletter(
+        &self,
+        username: &String,
+        slug: &String,
+    ) -> reqwest::Response {
+        self.api_client
+            .get(&format!(
+                "{}/newsletters/by_user/{}/issue/{}",
+                &self.address, username, slug
+            ))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_public_newsletters_by_user(&self, username: &String) -> reqwest::Response {
+        self.api_client
+            .get(&format!(
+                "{}/newsletters/by_user/{}",
+                &self.address, username
+            ))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_users(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/users", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_user(&self, username: &String) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/users/{}", &self.address, username))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
     pub async fn get_authenticate(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/admin/authenticate", &self.address))
