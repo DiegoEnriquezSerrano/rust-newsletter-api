@@ -1,36 +1,38 @@
 use crate::domain::SubscriberEmail;
 use crate::email_client::EmailClient;
 use secrecy::{ExposeSecret, Secret};
+use serde::Deserialize;
 use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::postgres::{PgConnectOptions, PgSslMode};
 use std::convert::{TryFrom, TryInto};
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct Settings {
-    pub database: DatabaseSettings,
     pub application: ApplicationSettings,
+    pub database: DatabaseSettings,
     pub email_client: EmailClientSettings,
+    pub hosts: HostnameSettings,
     pub redis_uri: Secret<String>,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct ApplicationSettings {
-    #[serde(deserialize_with = "deserialize_number_from_string")]
-    pub port: u16,
-    pub host: String,
     pub base_url: String,
     pub hmac_secret: Secret<String>,
+    pub host: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub port: u16,
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct DatabaseSettings {
-    pub username: String,
+    pub database_name: String,
+    pub host: String,
     pub password: Secret<String>,
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
-    pub host: String,
-    pub database_name: String,
     pub require_ssl: bool,
+    pub username: String,
 }
 
 impl DatabaseSettings {
@@ -50,7 +52,7 @@ impl DatabaseSettings {
     }
 }
 
-#[derive(serde::Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct EmailClientSettings {
     pub base_url: String,
     pub sender_email: String,
@@ -78,6 +80,11 @@ impl EmailClientSettings {
     pub fn timeout(&self) -> std::time::Duration {
         std::time::Duration::from_millis(self.timeout_milliseconds)
     }
+}
+
+#[derive(Deserialize, Clone)]
+pub struct HostnameSettings {
+    pub client: String,
 }
 
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {
