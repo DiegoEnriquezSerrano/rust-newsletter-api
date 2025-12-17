@@ -22,6 +22,25 @@ services:
       - 6379:6379
     volumes:
       - newsletter-valkey:/data
+  newsletter-test-db:
+    image: postgres:17-alpine
+    env_file: .env.test
+    expose:
+      - 54321
+    networks:
+      - newsletter-test-net
+    ports:
+      - 54321:54321
+  newsletter-test-valkey:
+    command: valkey-server --port 63791 --save 60 1 --loglevel debug
+    image: valkey/valkey:8.0-alpine
+    env_file: .env.test
+    expose:
+      - 63791
+    networks:
+      - newsletter-test-net
+    ports:
+      - 63791:63791
 volumes:
   newsletter-db:
   newsletter-valkey:
@@ -29,3 +48,6 @@ networks:
   newsletter-net:
     driver: bridge
     name: newsletter-net
+  newsletter-test-net:
+    driver: bridge
+    name: newsletter-test-net
