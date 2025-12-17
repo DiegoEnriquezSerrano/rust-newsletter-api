@@ -337,6 +337,10 @@ pub async fn spawn_app() -> TestApp {
     // Launch a mock server to stand in for Postmark's API
     let email_server = MockServer::start().await;
 
+    unsafe {
+        std::env::set_var("APP_ENVIRONMENT", "test");
+    }
+
     // Randomise configuration to ensure test isolation
     let configuration = {
         let mut c = get_configuration().expect("Failed to read configuration.");
