@@ -9,6 +9,7 @@ use std::convert::{TryFrom, TryInto};
 #[derive(Deserialize, Clone)]
 pub struct Settings {
     pub application: ApplicationSettings,
+    pub cloudinary_client: CloudinaryClientSettings,
     pub database: DatabaseSettings,
     pub email_client: EmailClientSettings,
     pub hosts: HostnameSettings,
@@ -23,6 +24,17 @@ pub struct ApplicationSettings {
     #[serde(deserialize_with = "deserialize_number_from_string")]
     pub port: u16,
     pub session_key: String,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct CloudinaryClientSettings {
+    pub api_key: String,
+    pub api_secret: Secret<String>,
+    pub base_url: String,
+    pub bucket: String,
+    pub id: String,
+    #[serde(deserialize_with = "deserialize_number_from_string")]
+    pub timeout_milliseconds: u64,
 }
 
 #[derive(Deserialize, Clone)]
