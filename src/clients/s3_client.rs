@@ -43,6 +43,22 @@ impl S3Client {
         Ok(response)
     }
 
+    pub async fn put_user_profile_avatar(
+        &self,
+        user_id: &Uuid,
+        content: web::Bytes,
+    ) -> Result<ResponseData, anyhow::Error> {
+        let path = format!("user/avatar/{user_id}.webp");
+        let response: ResponseData = self
+            .buckets
+            .images
+            .put_object_with_content_type(path, &content[..], "image/webp")
+            .await
+            .context("Failed to store image.")?;
+
+        Ok(response)
+    }
+
     pub async fn put_user_profile_banner(
         &self,
         user_id: &Uuid,
