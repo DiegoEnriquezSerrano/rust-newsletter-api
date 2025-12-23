@@ -1,4 +1,5 @@
 use crate::utils::e500;
+use actix_web::web;
 use anyhow::Context;
 use reqwest::Client;
 use secrecy::{ExposeSecret, Secret};
@@ -7,6 +8,7 @@ use sha1::{Digest, Sha1};
 use std::fmt::Display;
 use std::time::{SystemTime, UNIX_EPOCH};
 use urlencoding::encode;
+use uuid::Uuid;
 
 pub struct CloudinaryClient {
     pub api_key: String,
@@ -33,6 +35,22 @@ impl CloudinaryClient {
             api_secret,
             bucket,
         }
+    }
+
+    pub async fn upload_newsletter_issue_cover_image(
+        &self,
+        file: String,
+        newsletter_issue_id: &Uuid,
+    ) -> Result<CloudinaryUploadResponse, actix_web::Error> {
+        let eager: String = "q_70,c_fill,g_auto,ar_16:9,w_1280".into();
+        let public_id = format!("newsletter/cover/{}", newsletter_issue_id);
+        let transformation: String = "f_webp".into();
+        let result = self
+            .upload_image(file, public_id, eager, transformation)
+            .await
+            .map_err(e500)?;
+
+        Ok(result)
     }
 
     pub async fn upload_image(
@@ -84,6 +102,32 @@ impl CloudinaryClient {
             .map_err(e500)?;
 
         Ok(uploaded_image)
+    }
+
+    // We use cloudinary as an image processor to ensure images are formatted
+    // as webp and/or to automatically crop/pad images. For the latter we'll
+    // have eagerly generated a transformation for the image.
+    pub async fn get_image_as_bytes(
+        &self,
+        uploaded_image: CloudinaryUploadResponse,
+    ) -> Result<web::Bytes, actix_web::Error> {
+        let secure_url = match uploaded_image.eager {
+            Some(e) => e[0].secure_url.clone(),
+            None => uploaded_image.secure_url,
+        };
+        let bytes = self
+            .http_client
+            .get(secure_url)
+            .send()
+            .await
+            .context("Failed to get image from image server.")
+            .map_err(e500)?
+            .bytes()
+            .await
+            .context("Failed to read image bytes.")
+            .map_err(e500)?;
+
+        Ok(bytes)
     }
 }
 
@@ -154,8 +198,8 @@ pub struct EagerTransformation {
 
 #[cfg(test)]
 mod tests {
-    use crate::clients::cloudinary_client::CloudinaryClient;
     use crate::clients::cloudinary_client::fixtures::mock_cloudinary_upload_response;
+    use crate::clients::cloudinary_client::{CloudinaryClient, CloudinaryUploadResponse};
     use claims::{assert_err, assert_ok};
     use fake::faker::lorem::en::Word;
     use fake::{Fake, Faker};
@@ -303,6 +347,30 @@ mod tests {
             .await;
 
         assert_err!(outcome);
+    }
+
+    #[tokio::test]
+    async fn get_image_as_bytes_fires_a_request_to_cloudinary_server() {
+        let mock_server = MockServer::start().await;
+        let cloudinary_client = cloudinary_client(mock_server.uri().clone());
+
+        Mock::given(method("GET"))
+            .and(path("/cld-docs/image/upload/v1719307544/c_fill,g_auto,h_450,w_450/gotjephlnz2jgiu20zni.webp"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(b"Hello, world!"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let response: CloudinaryUploadResponse = serde_json::from_str(
+            mock_cloudinary_upload_response(&mock_server.uri())
+                .to_string()
+                .as_str(),
+        )
+        .unwrap();
+
+        let outcome = cloudinary_client.get_image_as_bytes(response).await;
+
+        assert_ok!(outcome);
     }
 }
 

@@ -32,6 +32,25 @@ impl S3Client {
         })
     }
 
+    pub async fn put_newsletter_issue_cover_image(
+        &self,
+        newsletter_issue_id: &Uuid,
+        content: web::Bytes,
+    ) -> Result<ResponseData, anyhow::Error> {
+        let path = format!(
+            "{}/images/newsletter/cover/{newsletter_issue_id}.webp",
+            self.endpoint
+        );
+        let response: ResponseData = self
+            .buckets
+            .images
+            .put_object_with_content_type(path, &content[..], "image/webp")
+            .await
+            .context("Failed to store image.")?;
+
+        Ok(response)
+    }
+
     async fn initialize_buckets(
         region: String,
         endpoint: String,
@@ -98,8 +117,12 @@ pub struct Buckets {
 #[cfg(test)]
 mod tests {
     use crate::clients::s3_client::S3Client;
+    use actix_web::body::MessageBody;
+    use actix_web::web::Bytes;
+    use claims::{assert_err, assert_ok};
     use fake::Fake;
     use fake::faker::lorem::en::Word;
+    use uuid::Uuid;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -214,5 +237,47 @@ mod tests {
             .await;
 
         s3_client(&mock_server).await;
+    }
+
+    #[tokio::test]
+    async fn put_newsletter_issue_cover_image_sends_bytes_to_bucket_path() {
+        let mock_server = MockServer::start().await;
+        initialize_buckets(&mock_server).await;
+        let s3_client: S3Client = s3_client(&mock_server).await;
+
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(200))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let content: Bytes = "Hello, world!".try_into_bytes().unwrap();
+        let outcome = s3_client
+            .put_newsletter_issue_cover_image(&Uuid::new_v4(), content)
+            .await;
+
+        assert_ok!(outcome);
+    }
+
+    #[tokio::test]
+    async fn put_newsletter_issue_cover_image_returns_error_if_unauthorized() {
+        s3::set_retries(0);
+
+        let mock_server = MockServer::start().await;
+        initialize_buckets(&mock_server).await;
+        let s3_client: S3Client = s3_client(&mock_server).await;
+
+        Mock::given(method("PUT"))
+            .respond_with(ResponseTemplate::new(401))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let content: Bytes = "Hello, world!".try_into_bytes().unwrap();
+        let outcome = s3_client
+            .put_newsletter_issue_cover_image(&Uuid::new_v4(), content)
+            .await;
+
+        assert_err!(outcome);
     }
 }
