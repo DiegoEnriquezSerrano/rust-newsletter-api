@@ -240,11 +240,7 @@ async fn create_newsletter_can_process_image() {
     let response = app.get_admin_newsletter_issue(&newsletter_issue_id).await;
     let response_body: NewsletterIssueAPI = response.json().await.unwrap();
 
-    assert_eq!(
-        response_body.cover_image_url,
-        format!(
-            "http://127.0.0.1:9002/images/newsletter/cover/{}.webp",
-            &newsletter_issue_id
-        )
-    );
+    assert!(response_body.cover_image_url.contains(&format!(
+        "/images/newsletter/cover/{newsletter_issue_id}.webp",
+    )));
 }

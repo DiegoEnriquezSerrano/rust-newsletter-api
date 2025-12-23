@@ -47,7 +47,7 @@ pub struct CreateNewsletterParams {
 
 #[post("/newsletters")]
 #[tracing::instrument(
-    name = "Publish a newsletter issue",
+    name = "Creating a newsletter issue",
     skip_all,
     fields(user_id=%&*user_id)
 )]

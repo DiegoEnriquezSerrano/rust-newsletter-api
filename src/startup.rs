@@ -135,6 +135,7 @@ async fn run(
                     .service(admin::newsletters::drafts::get)
                     .service(admin::newsletters::detail::get)
                     .service(admin::newsletters::detail::put)
+                    .service(admin::newsletters::detail::cover_image::put)
                     .service(admin::newsletters::detail::publish::put)
                     .service(admin::user::get)
                     .service(admin::user::put)
@@ -155,6 +156,7 @@ async fn run(
             .app_data(email_client.clone())
             .app_data(s3_client.clone())
             .app_data(Data::new(HmacSecret(hmac_secret.clone())))
+            .app_data(web::JsonConfig::default().limit(1024 * 1024 * 50))
     })
     .listen(listener)?
     .run();

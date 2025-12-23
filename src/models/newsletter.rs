@@ -206,12 +206,14 @@ impl NewsletterIssue {
                 r#"
                   UPDATE newsletter_issues
                   SET content = $1,
-                      description = $2,
-                      title = $3
-                  WHERE newsletter_issue_id = $4
-                      AND user_id = $5
+                      cover_image_url = $2,
+                      description = $3,
+                      title = $4
+                  WHERE newsletter_issue_id = $5
+                      AND user_id = $6
                 "#,
                 &self.content,
+                &self.cover_image_url,
                 &self.description,
                 &self.title,
                 &self.newsletter_issue_id,
@@ -355,7 +357,7 @@ impl NewsletterIssue {
 
     pub fn prepare_cover_image_url(
         newsletter_issue_id: &Uuid,
-        s3_base_url: String,
+        s3_base_url: &str,
     ) -> Result<String, String> {
         let image_url = format!("{s3_base_url}/images/newsletter/cover/{newsletter_issue_id}.webp");
         let image_url = ImageUrl::parse(image_url)?.as_ref().to_string();
@@ -363,7 +365,7 @@ impl NewsletterIssue {
         Ok(image_url)
     }
 
-    pub fn set_cover_image_url(self, s3_base_url: String, is_empty: bool) -> Result<Self, String> {
+    pub fn set_cover_image_url(self, s3_base_url: &str, is_empty: bool) -> Result<Self, String> {
         let cover_image_url = if is_empty {
             String::from("")
         } else {
@@ -619,7 +621,7 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
         let cover_image_url = if is_empty_or_whitespace(&cover_image) {
             String::from("")
         } else {
-            NewsletterIssue::prepare_cover_image_url(&newsletter_issue_id, data.s3_base_url)?
+            NewsletterIssue::prepare_cover_image_url(&newsletter_issue_id, &data.s3_base_url)?
         };
 
         Ok(NewNewsletterIssue {

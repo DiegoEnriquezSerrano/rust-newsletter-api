@@ -183,6 +183,25 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    pub async fn put_admin_update_newsletter_issue_cover_image<Body>(
+        &self,
+        newsletter_issue_id: &Uuid,
+        body: &Body,
+    ) -> reqwest::Response
+    where
+        Body: serde::Serialize,
+    {
+        self.api_client
+            .put(&format!(
+                "{}/admin/newsletter/{}/cover_image",
+                &self.address, newsletter_issue_id
+            ))
+            .json(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
     pub async fn get_admin_user(&self) -> reqwest::Response {
         self.api_client
             .get(&format!("{}/admin/user", &self.address))
