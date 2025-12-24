@@ -48,20 +48,17 @@ impl NewsletterIssue {
         mut self,
         data: NewsletterIssueUpdateParams,
     ) -> Result<NewsletterIssue, String> {
-        let mut content = self.content;
-        let description: Description;
-        let title = Title::parse(data.title)?;
+        self.title = Title::parse(data.title)?.as_ref().to_string();
 
         if self.published_at.is_none() {
-            description = Description::parse_draft(data.description)?;
+            self.content = data.content;
+            self.description = Description::parse_draft(data.description)?
+                .as_ref()
+                .to_string();
         } else {
-            description = Description::parse(data.description)?;
-            content = Content::parse(data.content)?.as_ref().to_string();
+            self.content = Content::parse(data.content)?.as_ref().to_string();
+            self.description = Description::parse(data.description)?.as_ref().to_string();
         }
-
-        self.content = content;
-        self.description = description.as_ref().to_string();
-        self.title = title.as_ref().to_string();
 
         Ok(self)
     }
