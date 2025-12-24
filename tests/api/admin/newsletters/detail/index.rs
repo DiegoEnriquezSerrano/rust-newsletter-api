@@ -119,9 +119,14 @@ async fn authenticated_user_can_update_a_newsletter() {
 
     let response = app.get_admin_newsletter_issue(&newsletter_issue_id).await;
     let response_body: NewsletterIssueAPI = response.json().await.unwrap();
+
     assert_eq!(
         String::from("Newsletter title - updated"),
         response_body.title
+    );
+    assert_eq!(
+        String::from("## Newsletter content - updated"),
+        response_body.content
     );
 }
 
