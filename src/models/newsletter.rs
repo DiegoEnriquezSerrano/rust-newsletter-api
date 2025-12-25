@@ -259,6 +259,7 @@ impl NewsletterIssue {
             r#"
               SELECT
                 newsletter_issues.content,
+                newsletter_issues.cover_image_url,
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -292,6 +293,7 @@ impl NewsletterIssue {
             PublicNewsletterListItem,
             r#"
               SELECT
+                newsletter_issues.cover_image_url,
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -323,6 +325,7 @@ impl NewsletterIssue {
             PublicNewsletterListItem,
             r#"
               SELECT
+                newsletter_issues.cover_image_url,
                 newsletter_issues.description,
                 newsletter_issues.published_at,
                 newsletter_issues.slug,
@@ -651,6 +654,7 @@ impl TryFrom<NewNewsletterIssueData> for NewNewsletterIssue {
 pub struct PublicNewsletter {
     #[serde(serialize_with = "serialize_html_content")]
     pub content: String,
+    pub cover_image_url: String,
     pub description: String,
     pub published_at: Option<DateTime<Utc>>,
     pub slug: String,
@@ -664,6 +668,7 @@ fn serialize_html_content<S: Serializer>(content: &str, serializer: S) -> Result
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PublicNewsletterListItem {
+    pub cover_image_url: String,
     pub description: String,
     pub published_at: Option<DateTime<Utc>>,
     pub slug: String,
