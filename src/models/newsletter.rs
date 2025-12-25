@@ -244,6 +244,11 @@ impl NewsletterIssue {
         Ok(self.newsletter_issue_id)
     }
 
+    // Note - For serializing nested records sqlx allows returning
+    // sequence of values, which are then mapped to the key names in
+    // order. This means the order of the columns in the query must
+    // reflect the order in the struct definition. For casted values,
+    // sqlx only checks that the column exists.
     pub async fn find_public_newsletter(
         username: String,
         slug: String,
@@ -259,11 +264,11 @@ impl NewsletterIssue {
                 newsletter_issues.slug,
                 newsletter_issues.title,
                 (
-                  users.username,
                   user_profiles.avatar_url,
                   user_profiles.banner_url,
+                  user_profiles.description,
                   user_profiles.display_name,
-                  user_profiles.description
+                  users.username
                 ) AS "user!: AssociatedUser"
               FROM newsletter_issues
               JOIN users ON newsletter_issues.user_id = users.user_id
@@ -292,11 +297,11 @@ impl NewsletterIssue {
                 newsletter_issues.slug,
                 newsletter_issues.title,
                 (
-                  users.username,
                   user_profiles.avatar_url,
                   user_profiles.banner_url,
+                  user_profiles.description,
                   user_profiles.display_name,
-                  user_profiles.description
+                  users.username
                 ) AS "user!: AssociatedUser"
               FROM newsletter_issues
               JOIN users ON newsletter_issues.user_id = users.user_id
@@ -323,11 +328,11 @@ impl NewsletterIssue {
                 newsletter_issues.slug,
                 newsletter_issues.title,
                 (
-                  users.username,
                   user_profiles.avatar_url,
                   user_profiles.banner_url,
+                  user_profiles.description,
                   user_profiles.display_name,
-                  user_profiles.description
+                  users.username
                 ) AS "user!: AssociatedUser"
               FROM newsletter_issues
               JOIN users ON newsletter_issues.user_id = users.user_id
